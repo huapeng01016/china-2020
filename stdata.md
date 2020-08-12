@@ -9,16 +9,73 @@
 
 ## **import delimited**
 ````
+<<dd_do>>
 local date = "08-10-2020"
 import delimited "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/`date'.csv", clear
-describe
-
 list in 1/5
+<</dd_do>>
 ````
 
 ## **import excel**
 
-## SAS和SPSS
+````
+<<dd_do>>
+import excel "E:\projects\china-2020\stata\广东数据\广东省新冠肺炎疫情基本情况统计表_1582454685234.xlsx", sheet("Sheet1")
+list in 1/5
+<</dd_do>>
+````
+
+## **import　spss**
+
+````
+<<dd_do>>
+import spss using "E:\projects\china-2020\stata\manipulate.sav", clear
+list in 1/5
+<</dd_do>>
+````
+
+## **import　sas**
+
+````
+<<dd_do>>
+import sas using "E:\projects\china-2020\stata\psam_p30.sas7bdat", clear
+<</dd_do>>
+````
+
+## get data from pandas using **sfi**
+
+````
+python:
+import pandas as pd
+data = pd.read_html("https://www.cdc.gov/coronavirus/2019-ncov/covid-data/covidview/index.html")
+df = data[4]
+t = df.values.tolist()
+````
+
+生成Stata dataset
+~~~~
+python:
+from sfi import Data
+Data.addObs(len(t))
+stata: gen desc = ""
+stata: gen indian = ""
+stata: gen balck = ""
+stata: gen hisp = ""
+stata: gen asian = ""
+stata: gen white = ""
+Data.store(None, range(len(t)), t)
+end
+~~~~
+
+<<dd_do: quietly>>
+use stata/covid_prop.dta, clear
+<</dd_do>>
+
+~~~~
+<<dd_do>>
+list, clean
+<</dd_do>>
+~~~~
 
 ## 抓取Covid-19数据
 
