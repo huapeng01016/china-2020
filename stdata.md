@@ -1,84 +1,24 @@
-# Stata Python 融合应用
+# 使用Stata获取与处理数据
 
 ##  [Hua Peng@StataCorp][hpeng]
 ### 2020 Stata 中国用户大会
-### [https://huapeng01016.github.io/china1-2020/](https://huapeng01016.github.io/china1-2020/)
-
-# Stata 16与Python的紧密结合
-
-- 互动式运行Python程序
-- 在do-file与ado-file中定义与运行Python程序
-- Python与Stata通过Stata Function Interface (sfi)互动
-
-# 互动式执行Python
-
-## **Hello World!**
-
-~~~~
-<<dd_do>>
-python:
-print('Hello World!')
-end
-<</dd_do>>
-~~~~
-
-## **for** 循环
-
-Stata与其他Python环境一样，输入Python语句需要正确使用“缩进”。
-
-~~~~
-<<dd_do>>
-python:
-sum = 0
-for i in range(7):
-    sum = sum + i
-print(sum)
-end
-<</dd_do>>
-~~~~
-
-## **sfi**
-
-~~~~
-<<dd_do>>
-python:
-from functools import reduce
-from sfi import Data, Macro
-
-stata: quietly sysuse auto, clear
-
-sum = reduce((lambda x, y: x + y), Data.get(var='price'))
-
-Macro.setLocal('sum', str(sum))
-end
-display "sum of var price is : `sum'"
-<</dd_do>>
-~~~~
-
-## 更多**sfi**
-
-~~~~
-<<dd_do>>
-python:
-sum1 = reduce((lambda x, y: x + y), Data.get(var='rep78'))
-sum1
-sum2 = reduce((lambda x, y: x + y), Data.get(var='rep78', selectvar=-1))
-sum2
-end
-<</dd_do>>
-~~~~
+### [https://huapeng01016.github.io/china-2020/](https://huapeng01016.github.io/china-2020/)
 
 
-# 使用Python模块
+# 数据的获取
 
-* Pandas
-* Numpy
-* Matplotlib, Plotly
-* BeautifulSoup, lxml
-* Scikit-Learn, Tensorflow, Keras
-* NLTK,jieba
+## **import delimited**
+````
+local date = "08-10-2020"
+import delimited "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/`date'.csv", clear
+describe
 
-# 网络数据的抓取与显示
+list in 1/5
+````
+
+## **import excel**
+
+## SAS和SPSS
 
 ## 抓取Covid-19数据
 
@@ -135,7 +75,7 @@ end
 * [07-30-2020 Texas](./stata/07-30-2020-Texas.html)
 
 
-# 三维曲面图
+# 与Python互传数据
 
 ## 导入Python模块
 
@@ -226,210 +166,6 @@ end
 ![sandstone.gif](./sandstone.gif)
 
 
-# Support Vector Machine (SVM)
-
-## **pysvm** ([ado file](./stata/pysvm.ado))
-
-~~~~
-program pysvm
-	version 16
-	syntax varlist, predict(name)
-	gettoken label feature : varlist
-	python: dosvm("`label'", "`feature'", "`predict'")
-end
-~~~~
-
-## Python部分[ado file](./stata/pysvm.ado)
-
-~~~~
-python:
-from sfi import Data
-import numpy as np
-from sklearn.svm import SVC
-
-def dosvm(label, features, predict):
-	X = np.array(Data.get(features))
-	y = np.array(Data.get(label))
-
-	svc_clf = SVC(gamma='auto')
-	svc_clf.fit(X, y)
-
-	y_pred = svc_clf.predict(X)
-
-	Data.addVarByte(predict)
-	Data.store(predict, None, y_pred)
-
-end
-~~~~
-
-## 用**auto** dataset测试
-
-<<dd_do: quietly>>
-adopath + ./stata
-<</dd_do>>
-
-~~~~
-<<dd_do>>
-sysuse auto, clear
-pysvm foreign mpg price, predict(for2)
-<</dd_do>>
-~~~~
-
-## 比较结果
-
-~~~~
-<<dd_do>>
-label values for2 origin
-tabulate foreign for2, nokey
-<</dd_do>>
-~~~~
-
-## 改进版
-
-<<dd_do: quietly>>
-sysuse auto, clear
-set seed 12345
-<</dd_do>>
-
-~~~~
-<<dd_do>>
-pysvm2 foreign mpg price if runiform() <= 0.2
-pysvm2predict for2
-<</dd_do>>
-~~~~
-
-## 
-
-~~~~
-<<dd_do>>
-label values for2 origin
-tabulate foreign for2, nokey
-<</dd_do>>
-~~~~
-
-## 训练程序([pysvm2.ado](./stata/pysvm2.ado))
-
-~~~~
-program pysvm2
-	version 16
-	syntax varlist(min=3) [if] [in]
-	gettoken label features : varlist
-	marksample touse
-	qui count if `touse'
-	if r(N) == 0 {
-		di as error "no observations"
-		exit 2000
-	}
-
-	qui summarize `label' if `touse'
-	if r(min) >= r(max) {
-		di as error "outcome does not vary"
-		exit 2000
-	}
-
-	quietly python: dosvm2("`label'", "`features'", "`touse'")
-	di as text "note: training finished successfully"
-end
-~~~~
-
-## Python部分[pysvm2.ado](./stata/pysvm2.ado)
-
-~~~~
-python:
-import sys
-from sfi import Data, Macro
-import numpy as np
-from sklearn.svm import SVC
-import __main__
-
-def dosvm2(label, features, select):
-	X = np.array(Data.get(features, selectvar=select))
-	y = np.array(Data.get(label, selectvar=select))
-
-	svc_clf = SVC(gamma='auto')
-	svc_clf.fit(X, y)
-
-	__main__.svc_clf = svc_clf
-	Macro.setGlobal('e(svm_features)', features)
-	return svc_clf
-end
-~~~~
-
-## 预测程序([pysvm2predict.ado](./stata/pysvm2predict.ado))
-
-~~~~
-program pysvm2predict
-	version 16
-	syntax anything [if] [in]
-
-	gettoken newvar rest : anything
-	if "`rest'" != "" {
-		exit 198
-	}
-	confirm new variable `newvar'
-	marksample touse
-	qui count if `touse'
-	if r(N) == 0 {
-		di as text "zero observations"
-		exit 2000
-	}
-
-	qui replace `touse' = _n if `touse' != 0 	
-	python: dosvmpredict2("`newvar'", "`touse'")
-end
-~~~~
-
-## Python部分[pysvm2predict.ado](./stata/pysvm2predict.ado)
-
-~~~~
-python:
-import sys
-from sfi import Data, Macro
-import numpy as np
-from sklearn.svm import SVC
-from __main__ import svc_clf
-
-def dosvmpredict2(predict, select):
-	features = select + " "+ Macro.getGlobal('e(svm_features)')
-	X = np.array(Data.get(features, selectvar=select))
-
-	y_pred = svc_clf.predict(X[:,1:])
-	y1 = np.reshape(y_pred, (-1,1))
-
-	y = np.concatenate((X, y1), axis=1)
-	Data.addVarDouble(predict)
-	dim = y.shape[0]
-	j = y.shape[1]-1
-	for i in range(dim):
-		Data.storeAt(predict, y[i,0]-1, y[i,j])
-
-end
-~~~~
-
-# ado程序间传递Python实例
-
-##
-
-In [pysvm2.ado](./stata/pysvm2.ado) ado code:
-
-~~~~
-...
-import __main__
-...
-__main__.svc_clf = svc_clf
-...
-~~~~
-
-##
-To access **svc_clf** in Python routines in ado files:
-
-~~~~
-...
-from __main__ import svc_clf
-...
-~~~~
-
-
 # 网络数据的抓取
 
 ## 使用**pandas**获取表格
@@ -503,14 +239,6 @@ keep if open_price != ""
 list ticker open_price open_date close_price close_date in 1/5, clean
 <</dd_do>>
 ~~~~
-
-# 工具
-
-- **python query**
-- **python describe**
-- **python set exec**
-- **python search**
-
 
 
 # 词语分析
